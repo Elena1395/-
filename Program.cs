@@ -1,12 +1,7 @@
 ﻿using System;
 using System.IO;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-
+using System.Diagnostics;
+using System.Xml.Serialization;
 
 namespace Лаб2
 {
@@ -22,14 +17,14 @@ namespace Лаб2
 
     ///Значение n и характеристики ресурсов берутся из файла input.txt. </remarks>
     ///
-    ///Пример кореектного воода данных из файла:
+    ///Пример корректного ввода данных из файла:
     ///n=34
     ///lastname=A
     ///Book: A,1,1934,a1
     ///Paper: Aa,1,NM,12-23,1935
     ///EResources: Aaa,1,https://docs.microsoft.com,lala
 
-    class Program
+    public class Program
     {
         /// <summary>
         /// Абстрактный класс Source
@@ -37,9 +32,13 @@ namespace Лаб2
         /// <remarks>
         /// От него будут наследоваться производные классы: Book, Paper, EResources
         /// </remarks>
-        abstract class Source {
+        [XmlInclude(typeof(Book))]
+        [XmlInclude(typeof(Paper))]
+        [XmlInclude(typeof(EResources))]
+        abstract public class Source {
             public string Name { get; set; }
             public string Author_LN { get; set; }
+            public Source() { }
             public Source(string name, string author) {
                 Name = name;
                 Author_LN = author;
@@ -70,10 +69,13 @@ namespace Лаб2
         /// <remarks>
         /// Наследуется от Source
         /// </remarks>
-        class Book : Source {     
-             int Year { get; set; }
-             string Publisher { get; set; }
+        [Serializable]
+        public class Book : Source {
+            public int Year { get; set; }
+            public string Publisher { get; set; }
 
+            public Book() //: base()
+            { }
             public Book (string name, string author, int year, string publisher): base(name, author) {
                 Year = year;
                 Publisher = publisher;
@@ -97,11 +99,12 @@ namespace Лаб2
         /// <remarks>
         /// Наследуется от Source
         /// </remarks>
-        class Paper : Source
+        public class Paper : Source
         {
-            string Magazine_Name { get; set; }
-            int Year { get; set; }
-            string Number { get; set; }
+            public string Magazine_Name { get; set; }
+            public int Year { get; set; }
+            public string Number { get; set; }
+            public Paper() { }
             public Paper (string name, string author, string magName, string number, int year) : base(name, author)
             {
                 Year = year;
@@ -128,10 +131,11 @@ namespace Лаб2
         /// <remarks>
         /// Наследуется от Source
         /// </remarks>
-        class EResources : Source
+        public class EResources : Source
         {
-            string Link { get; set; }
-            string Annotation { get; set; }
+            public string Link { get; set; }
+            public string Annotation { get; set; }
+            public EResources() { }
 
             public EResources(string name, string author, string link, string annotation) : base(name, author)
             {
@@ -160,11 +164,18 @@ namespace Лаб2
         /// </remarks>
         static void Main(string[] args)
         {
+            Trace.Listeners.Add(new TextWriterTraceListener(System.IO.File.CreateText("Trace.txt")));//new TextWriterTraceListener(Console.Out)
+            Trace.AutoFlush = true;
+            Trace.Indent();
+            Trace.WriteLine("Entering Main");
+            
             string lastname = "";
             int n;
             int ind = 0;
             Source[] sources;
 
+            Trace.Indent();
+            Trace.WriteLine("Trying to read data from input");
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "input.txt");
             try
             {
@@ -175,14 +186,27 @@ namespace Лаб2
                     line = sr.ReadLine();
                     char ch = '=';
                     int indexOfChar = line.IndexOf(ch)+1;
+                    if (indexOfChar == 0)
+                    {
+                        throw new ArgumentException("некорректная информация об n");
+                    }
                     n = Int32.Parse(line.Substring(indexOfChar).Trim(' '));
                     sources = new Source[n];
+                    Trace.Indent();
+                    Trace.WriteLine("n found successfully");
 
                     line = sr.ReadLine();
                     ch = '=';
-                    indexOfChar = line.IndexOf(ch)+1;
+                    indexOfChar = line.IndexOf(ch)+1;//0
+                    if (indexOfChar == 0)
+                    {
+                        throw new ArgumentException("некорректная информация о lastname");
+                    }
                     lastname = line.Substring(indexOfChar).Trim(' ');
+                    Trace.WriteLine("lastname found successfully");
 
+                    Trace.Indent();
+                    Trace.WriteLine("Trying to read other information");
                     while ((line = sr.ReadLine()) != null)
                     {
                         if (line.Contains("Book:"))
@@ -213,9 +237,14 @@ namespace Лаб2
                             ind++;
                         }
                     }
+                    Trace.WriteLine("information found successfully");
+                    Trace.Unindent();
+                    Trace.WriteLineIf(ind !=n, "n и количество источников не совпадает");
+
                     if (ind != n) {
                         throw new IndexOutOfRangeException("n и количество источников не совпадает");
                     }
+             
                     //if (stInp == "")
                     //{
                     //    throw new ArgumentException("Вы ничего не ввели.");//ArgumentException, ArgumentNullException
@@ -234,7 +263,8 @@ namespace Лаб2
                 Console.ReadKey();
                 return;
             }
-
+            Trace.Unindent();
+            Trace.WriteLine("information was successfully extracted from the input file");
 
 
             Console.WriteLine("Информация о всех изданиях:");
@@ -253,16 +283,72 @@ namespace Лаб2
             }
 
 
-            Console.WriteLine("Проверка на искомое издание:");
+            
             Book b1=new Book("Ск2","ХМ",1224,"изд2" );
+            Paper p1 = new Paper("p1", "A1", "Mag1", "12-12-121", 1234);
+            EResources er1 = new EResources("er1", "A1", "link1", "Ann1");
+
+
+            Trace.WriteLine("Started serialization");
+
+
+            // передаем в конструктор тип класса
+            XmlSerializer formatter = new XmlSerializer(typeof(Source[]));
+            //XmlSerializer formatter1 = new XmlSerializer(typeof(Book));
+            //XmlSerializer formatter2 = new XmlSerializer(typeof(Paper));
+            //XmlSerializer formatter3 = new XmlSerializer(typeof(EResources));
+            try
+            {
+                using (FileStream fs = new FileStream("Sources.xml", FileMode.OpenOrCreate))
+                {
+                    formatter.Serialize(fs, sources);
+                    //formatter1.Serialize(fs, b1);
+                    //formatter2.Serialize(fs, p1);
+                    //formatter1.Serialize(fs, er1);
+                    Console.WriteLine("Сериализация");
+                }
+            }
+            catch (Exception e) {
+                Console.WriteLine(e.Message);
+            }
+
+
+            // десериализация
+            try
+            {
+                using (FileStream fs = new FileStream("Sources.xml", FileMode.OpenOrCreate))
+                {
+                    Source[] news = (Source[])formatter.Deserialize(fs);
+
+                    //Book newb = (Book)formatter1.Deserialize(fs);
+                    //Paper newp = (Paper)formatter2.Deserialize(fs);
+                    //EResources newer = (EResources)formatter3.Deserialize(fs);
+
+                    Console.WriteLine("Десериализация");
+                    foreach (var p in news)
+                    {
+                        Console.WriteLine(p.GetInfo());
+                    }
+                    //Console.WriteLine($"Имя: {newb.Name} --- Автор: {newb.Author_LN} --- Год издания: {newb.Year} --- Издательство: {newb.Publisher}");
+                    //Console.WriteLine($"Имя: {newp.Name} --- Автор: {newp.Author_LN} --- Журнал: {newp.Magazine_Name} --- Номер журнала: {newp.Number} --- Год издания: {newp.Year}");
+                    //Console.WriteLine($"Имя: {newer.Name} --- Автор: {newer.Author_LN} --- Ссылка: {newer.Link} --- Аннотация: {newer.Annotation}");
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+
+            Trace.WriteLine("Serialization was successfully");
+            Trace.Unindent();
+
+            Console.WriteLine("Проверка на искомое издание:");
             Book b2 = new Book("Ск", "ХМ", 1224, "изд");
             Console.WriteLine(b1.IsEqual(b2));
-
-            Paper p1 = new Paper("p1","A1","Mag1","12-12-121", 1234);
+    
             Paper p2 = new Paper("p1", "A1", "Mag1", "12-12-121", 1234);
             Console.WriteLine(p1.IsEqual(p2));
-
-            EResources er1 = new EResources("er1", "A1", "link1", "Ann1");
+   
             EResources er2 = new EResources("er2", "A1", "link2", "Ann2");
             Console.WriteLine(er2.IsEqual(er1));
 
@@ -283,6 +369,9 @@ namespace Лаб2
             //    Console.WriteLine(p.GetInfo());
             //}
 
+            Trace.WriteLine("Exiting Main");
+            Trace.Unindent();
+            Trace.Flush();
 
             Console.ReadKey();
         }
